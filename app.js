@@ -11,11 +11,16 @@ const rateLimit = require('express-rate-limit');
 const passport = require('passport');
 const multer = require('multer');
 const fs = require('fs');
+const cron = require('node-cron');
+
+const { releaseFundsJob } = require('./jobs/releaseFunds');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ─── Rate Limiting ───
+// ═══════════════════════════════════════════════════
+// RATE LIMITING
+// ═══════════════════════════════════════════════════
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -23,7 +28,9 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// ─── Suppress Mongoose Duplicate Index Warnings ───
+// ═══════════════════════════════════════════════════
+// SUPPRESS MONGOOSE WARNINGS
+// ═══════════════════════════════════════════════════
 process.on('warning', (warning) => {
   if (warning.code === 'MONGOOSE' && warning.message.includes('Duplicate schema index')) {
     return;
@@ -31,7 +38,9 @@ process.on('warning', (warning) => {
   console.warn(warning);
 });
 
-// ─── Database Connection ───
+// ═══════════════════════════════════════════════════
+// DATABASE CONNECTION
+// ═══════════════════════════════════════════════════
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/shopp123')
   .then(() => console.log('✅ MongoDB Connected'))
   .catch(err => {
@@ -39,21 +48,29 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/shopp123'
     process.exit(1);
   });
 
-// ─── View Engine ───
+// ═══════════════════════════════════════════════════
+// VIEW ENGINE
+// ═══════════════════════════════════════════════════
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// ─── Static Files ───
+// ═══════════════════════════════════════════════════
+// STATIC FILES
+// ═══════════════════════════════════════════════════
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ─── Body Parsing ───
+// ═══════════════════════════════════════════════════
+// BODY PARSING
+// ═══════════════════════════════════════════════════
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(methodOverride('_method'));
 
-// ─── Session Configuration (for flash messages) ───
+// ═══════════════════════════════════════════════════
+// SESSION (for flash messages)
+// ═══════════════════════════════════════════════════
 app.use(session({
   secret: process.env.SESSION_SECRET || 'shopp123-super-secret-key',
   resave: false,
@@ -65,13 +82,19 @@ app.use(session({
   }
 }));
 
-// ─── Passport Configuration ───
+// ═══════════════════════════════════════════════════
+// PASSPORT
+// ═══════════════════════════════════════════════════
 app.use(passport.initialize());
 
-// ─── Flash Messages ───
+// ═══════════════════════════════════════════════════
+// FLASH MESSAGES
+// ═══════════════════════════════════════════════════
 app.use(flash());
 
-// ─── JWT Auth Middleware (sets req.seller from cookie) ───
+// ═══════════════════════════════════════════════════
+// JWT AUTH MIDDLEWARE (sets req.seller from cookie)
+// ═══════════════════════════════════════════════════
 app.use((req, res, next) => {
   const { verifyToken } = require('./services/authentication');
   const token = req.cookies['token'];
@@ -90,7 +113,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// ─── Global Variables & Locals ───
+// ═══════════════════════════════════════════════════
+// GLOBAL VARIABLES & LOCALS
+// ═══════════════════════════════════════════════════
 app.use((req, res, next) => {
   res.locals.success_msg = req.flash('success');
   res.locals.error_msg = req.flash('error');
@@ -105,7 +130,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// ─── Global EJS Helpers ───
+// ═══════════════════════════════════════════════════
+// GLOBAL EJS HELPERS
+// ═══════════════════════════════════════════════════
 app.locals.truncate = function(text, length = 60) {
   if (!text) return '';
   text = String(text);
@@ -120,7 +147,14 @@ app.locals.formatDate = function(date) {
   });
 };
 
-// ─── Multer Configuration ───
+app.locals.formatCurrency = function(amount) {
+  if (amount === undefined || amount === null) return '₹0';
+  return '₹' + Number(amount).toLocaleString('en-IN');
+};
+
+// ═══════════════════════════════════════════════════
+// MULTER CONFIGURATION
+// ═══════════════════════════════════════════════════
 const uploadDirs = [
   'uploads/products/thumbnails',
   'uploads/products/images',
@@ -205,13 +239,17 @@ safeRequire('./routes/Admin', '/admin');
 // ─── Product Routes ───
 safeRequire('./routes/product', '/products');
 
+// ─── Customer Order Routes (NEW) ───
+safeRequire('./routes/customerOrder', '/orders');
+
 // ─── Optional routes (uncomment when ready) ───
 // safeRequire('./routes/index', '/');
 // safeRequire('./routes/auth', '/auth');
 // safeRequire('./routes/cart', '/cart');
-// safeRequire('./routes/order', '/orders');
 
-// ─── Home / Landing Page ───
+// ═══════════════════════════════════════════════════
+// HOME / LANDING PAGE
+// ═══════════════════════════════════════════════════
 app.get('/', (req, res) => {
   res.render('home', {
     title: 'SellerHub',
@@ -219,12 +257,16 @@ app.get('/', (req, res) => {
   });
 });
 
-// ─── Health Check ───
+// ═══════════════════════════════════════════════════
+// HEALTH CHECK
+// ═══════════════════════════════════════════════════
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// ─── Error Handling ───
+// ═══════════════════════════════════════════════════
+// ERROR HANDLING
+// ═══════════════════════════════════════════════════
 app.use((err, req, res, next) => {
   console.error('🚨 Error:', err);
 
@@ -248,7 +290,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ─── 404 Handler ───
+// ═══════════════════════════════════════════════════
+// 404 HANDLER
+// ═══════════════════════════════════════════════════
 app.use((req, res) => {
   res.status(404).render('404', {
     title: 'Page Not Found',
@@ -256,10 +300,27 @@ app.use((req, res) => {
   });
 });
 
-// ─── Start Server ───
+// ═══════════════════════════════════════════════════
+// CRON JOB: RELEASE FUNDS AFTER RETURN POLICY ENDS
+// Runs every day at midnight (00:00)
+// ═══════════════════════════════════════════════════
+cron.schedule('0 0 * * *', () => {
+  console.log('⏰ Running daily funds release job...');
+  releaseFundsJob().catch(err => {
+    console.error('❌ Funds release job failed:', err.message);
+  });
+});
+
+// Also run on startup (optional, for immediate testing)
+// releaseFundsJob().catch(err => console.error('❌ Startup funds release failed:', err.message));
+
+// ═══════════════════════════════════════════════════
+// START SERVER
+// ═══════════════════════════════════════════════════
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`💰 Daily funds release cron scheduled (midnight)`);
 });
 
 module.exports = app;
