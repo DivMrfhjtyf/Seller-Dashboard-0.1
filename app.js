@@ -256,39 +256,45 @@ const upload = multer({
 app.locals.upload = upload;
 
 // ═══════════════════════════════════════════════════
-// ROUTE LOADING
+// ROUTE LOADING - FIXED & CONSOLIDATED
 // ═══════════════════════════════════════════════════
 
 function safeRequire(routePath, mountPath) {
   try {
     const route = require(routePath);
     app.use(mountPath, route);
-    console.log(`✅ Route loaded: ${mountPath}`);
+    console.log(`✅ Route loaded: ${mountPath} (${routePath})`);
   } catch (err) {
     console.warn(`⚠️ Route skipped: ${routePath} — ${err.message}`);
   }
 }
 
-// Seller Routes
+// ─── SELLER ROUTES ───
 safeRequire('./routes/SellerGoogleAuth', '/seller');
 safeRequire('./routes/Seller', '/seller');
-safeRequire('./routes/earnings', '/seller/earnings');
-safeRequire('./routes/settings', '/seller/settings');
-safeRequire('./routes/product', '/seller/products');
-safeRequire('./routes/sellerOrders', '/seller/orders');
+safeRequire('./routes/product', '/seller/products');     // Add product management
+safeRequire('./routes/sellerOrders', '/seller/orders');  
+safeRequire('./routes/earnings', '/seller/earnings');    
+safeRequire('./routes/settings', '/seller/settings');    
 
-// Admin Routes
+// ─── ADMIN ROUTES (NEW STRUCTURE) ───
 safeRequire('./routes/Admin', '/admin');
-safeRequire('./routes/adminDashboard', '/admin/dashboard');
-safeRequire('./routes/adminSellers', '/admin/sellers');
-safeRequire('./routes/adminOrders', '/admin/orders');
-safeRequire('./routes/adminDelivery', '/admin/delivery');
+safeRequire('./routes/admin/dashboard', '/admin/dashboard');
+safeRequire('./routes/admin/sellers', '/admin/sellers');
+safeRequire('./routes/admin/orders', '/admin/orders');
+safeRequire('./routes/admin/delivery', '/admin/delivery');
 
-// Delivery Boy Routes
+// ─── ADMIN LEGACY ROUTES (Fallback compatibility) ───
+safeRequire('./routes/adminDashboard', '/admin/dash');
+safeRequire('./routes/adminSellers', '/admin/sell');
+safeRequire('./routes/adminOrders', '/admin/ord');
+safeRequire('./routes/adminDelivery', '/admin/deliv');
+
+// ─── DELIVERY BOY ROUTES ───
 safeRequire('./routes/deliveryBoy', '/delivery');
 safeRequire('./routes/deliveryOrders', '/delivery/orders');
 
-// Customer Routes
+// ─── CUSTOMER ROUTES ───
 safeRequire('./routes/customerOrder', '/orders');
 
 // ═══════════════════════════════════════════════════
@@ -326,7 +332,7 @@ if (cron && releaseFundsJob) {
   console.log('✅ Daily funds release cron scheduled (midnight)');
 }
 
-// ═══════════════════════════════════════════════════
+// ════════════════════════════════════════════════���══
 // ERROR HANDLING MIDDLEWARE
 // ═══════════════════════════════════════════════════
 app.use((err, req, res, next) => {
